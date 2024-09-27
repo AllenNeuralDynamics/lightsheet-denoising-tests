@@ -140,28 +140,32 @@ def denoise_compress_blocks(
     output_dir.mkdir(parents=True, exist_ok=True)
     all_data = []
 
-    for zarr_path, filter_params, codec_params in parameter_combinations:
+    for i, (zarr_path, filter_params, codec_params) in enumerate(parameter_combinations):
         logging.info(f"Processing {zarr_path.name}")
+        logging.info(f"Filter params: {filter_params}")
+        logging.info(f"Codec params: {codec_params}")
+
+        out_zarr_dir = output_dir / zarr_path.stem
+        out_zarr_dir.mkdir(parents=True, exist_ok=True)
 
         arr = da.from_zarr(zarr_path, component="0").squeeze()
 
-        out_zarr = zarr.empty(
-            arr.shape,
+        out_zarr = zarr.array(
+            data=arr.compute(),
             chunks=arr.chunksize,
-            dtype=arr.dtype,
             compressor=zarr.Blosc(**codec_params),
         )
-        out_zarr[:] = arr.compute()
 
         unfiltered_storage_ratio = out_zarr.nbytes / out_zarr.nbytes_stored
         logging.info(f"Unfiltered Storage Ratio: {unfiltered_storage_ratio}")
 
-        # Create an in-memory array with the same properties as the input array
-        out_zarr_denoised = zarr.empty(
-            arr.shape,
+        out_zarr_denoised = zarr.create(
+            shape=arr.shape,
             chunks=arr.chunksize,
             dtype=arr.dtype,
             compressor=zarr.Blosc(**codec_params),
+            store=zarr.DirectoryStore(out_zarr_dir / f"{zarr_path.stem}_{i}.zarr"),
+            overwrite=True
         )
 
         # Filter the array
