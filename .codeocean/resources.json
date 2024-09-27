@@ -1,0 +1,7 @@
+{
+	"version": 1,
+	"resource_class": "dedicated",
+	"machine_config": {
+		"instance_type": "m5a.8xlarge"
+	}
+}

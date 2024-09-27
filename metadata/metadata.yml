@@ -1,0 +1,5 @@
+metadata_version: 1
+name: Lightsheet Denoising Tests
+description: Capsule for testing denoising and compression of lightsheet data
+authors:
+- name: Cameron Arshadi

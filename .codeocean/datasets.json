@@ -1,0 +1,9 @@
+{
+	"version": 1,
+	"attached_datasets": [
+		{
+			"id": "4445a8b0-722b-44fc-890a-0d69475bb964",
+			"mount": "exaSPIM_706301_training_blocks"
+		}
+	]
+}
