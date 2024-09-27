@@ -21,6 +21,7 @@ RUN mamba install -y --channel=conda-forge \
         scipy==1.14.1 \
         seaborn==0.13.2 \
         zarr==2.18.3 \
+        s5cmd==2.2.2 \
     && mamba clean -ya
 
 ADD "https://github.com/coder/code-server/releases/download/v4.9.0/code-server-4.9.0-linux-amd64.tar.gz" /.code-server/code-server.tar.gz
