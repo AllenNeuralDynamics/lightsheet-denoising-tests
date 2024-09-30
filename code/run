@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+set -e
+
+usage() {
+    echo "Usage: $0 <IMAGE_DIR> <S3_BUCKET> <S3_PREFIX> [OUTPUT_DIR]"
+    echo "  IMAGE_DIR   - Local directory containing images to process."
+    echo "  S3_BUCKET   - S3 bucket name where data will be uploaded."
+    echo "  S3_PREFIX   - S3 prefix (path) where data will be uploaded."
+    echo "  OUTPUT_DIR  - (Optional) Directory to store results. Default is /results."
+    exit 1
+}
+
+check_command() {
+    command -v "$1" >/dev/null 2>&1 || { echo >&2 "Error: Command '$1' not found."; exit 1; }
+}
+
+if [ "$#" -lt 3 ]; then
+    echo "Error: Not enough arguments provided."
+    usage
+fi
+
+IMAGE_DIR="$1"
+S3_BUCKET="$2"
+S3_PREFIX="$3"
+OUTPUT_DIR="${4:-/results}"
+
+# Ensure S3_PREFIX ends with a '/'
+if [[ "${S3_PREFIX}" != */ ]]; then
+    S3_PREFIX="${S3_PREFIX}/"
+fi
+
+# Validate IMAGE_DIR
+if [ ! -d "$IMAGE_DIR" ]; then
+    echo "Error: IMAGE_DIR '$IMAGE_DIR' does not exist or is not a directory."
+    exit 1
+fi
+
+mkdir -p "$OUTPUT_DIR"
+
+check_command python
+check_command "./bin/copy_blocks_s3.sh"
+
+echo "Compressing image directory: ${IMAGE_DIR}"
+echo "Results will be stored in: ${OUTPUT_DIR}"
+echo "Will upload data to s3://${S3_BUCKET}/${S3_PREFIX}"
+
+python denoising_compression_test.py --image_dir "$IMAGE_DIR" --output_dir "$OUTPUT_DIR"
+
+./bin/copy_blocks_s3.sh "$S3_BUCKET" "$S3_PREFIX"

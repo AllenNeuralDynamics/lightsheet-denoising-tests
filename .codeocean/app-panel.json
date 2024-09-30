@@ -1,0 +1,23 @@
+{
+	"version": 1,
+	"parameters": [
+		{
+			"id": "haNCf0sdaLknB77u",
+			"name": "image_dir",
+			"type": "text",
+			"value_type": "string"
+		},
+		{
+			"id": "V9JjrjZDhJIp0cPU",
+			"name": "s3_bucket",
+			"type": "text",
+			"value_type": "string"
+		},
+		{
+			"id": "sNXmIw8twuGoqO29",
+			"name": "s3_prefix",
+			"type": "text",
+			"value_type": "string"
+		}
+	]
+}
