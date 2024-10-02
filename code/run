@@ -46,4 +46,4 @@ echo "Will upload data to s3://${S3_BUCKET}/${S3_PREFIX}"
 
 python denoising_compression_test.py --image_dir "$IMAGE_DIR" --output_dir "$OUTPUT_DIR"
 
-./bin/copy_blocks_s3.sh "$S3_BUCKET" "$S3_PREFIX"
+./bin/copy_blocks_s3.sh "$OUTPUT_DIR" "$S3_BUCKET" "$S3_PREFIX"
