@@ -3,30 +3,31 @@
 set -euo pipefail
 
 usage() {
-    echo "Usage: $0 S3_BUCKET S3_PREFIX"
-    echo "Example: $0 my-bucket my/prefix/"
+    echo "Usage: $0 UPLOAD_DIR S3_BUCKET S3_PREFIX"
+    echo "Example: $0 /path/to/upload my-bucket my/prefix/"
     exit 1
 }
 
-if [[ $# -ne 2 ]]; then
+if [[ $# -ne 3 ]]; then
     echo "Error: Incorrect number of arguments."
     usage
 fi
 
-S3_BUCKET="$1"
-S3_PREFIX="$2"
+UPLOAD_DIR="$1"
+S3_BUCKET="$2"
+S3_PREFIX="$3"
 
 if ! command -v s5cmd &> /dev/null; then
     echo "Error: 's5cmd' is not installed. Please install it before running this script."
     exit 1
 fi
 
-if [[ ! -d "/results/" ]]; then
-    echo "Error: Directory '/results/' does not exist."
+if [[ ! -d "${UPLOAD_DIR}" ]]; then
+    echo "Error: Directory '${UPLOAD_DIR}' does not exist."
     exit 1
 fi
 
-echo "Copying files from '/results/' to 's3://${S3_BUCKET}/${S3_PREFIX}'..."
-s5cmd cp "/results/" "s3://${S3_BUCKET}/${S3_PREFIX}"
+echo "Copying files from '${UPLOAD_DIR}' to 's3://${S3_BUCKET}/${S3_PREFIX}'..."
+s5cmd cp "${UPLOAD_DIR}" "s3://${S3_BUCKET}/${S3_PREFIX}"
 
 echo "Files successfully copied to 's3://${S3_BUCKET}/${S3_PREFIX}'"
