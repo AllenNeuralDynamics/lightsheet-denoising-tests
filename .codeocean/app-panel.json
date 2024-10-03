@@ -18,6 +18,16 @@
 			"name": "s3_prefix",
 			"type": "text",
 			"value_type": "string"
+		},
+		{
+			"id": "tNRiWrghZx8ERogU",
+			"name": "filter",
+			"type": "list",
+			"value_type": "string",
+			"extra_data": [
+				"median",
+				"nl_means"
+			]
 		}
 	]
 }

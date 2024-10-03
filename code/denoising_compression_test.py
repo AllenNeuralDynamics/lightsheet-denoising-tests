@@ -1,10 +1,12 @@
 import sys
 import time
-from itertools import product
-from pathlib import Path
-
 import argparse
 import logging
+from itertools import product
+from pathlib import Path
+from typing import Any, Callable, Dict, Iterable, List, Tuple, Union
+
+import dask
 import dask.array as da
 import numpy as np
 import pandas as pd
@@ -13,7 +15,8 @@ from dask_image.ndfilters import median_filter
 from distributed import Client, LocalCluster
 from numcodecs import blosc
 from skimage.morphology import cube
-from typing import Any, Callable, Dict, Iterable, List, Tuple, Union
+from skimage.restoration import denoise_nl_means, estimate_sigma
+from skimage.util import apply_parallel
 
 
 def make_serializable(obj: Any) -> Any:
@@ -42,7 +45,7 @@ def make_serializable(obj: Any) -> Any:
         return obj
 
 
-def filter_arr(arr: Any, func: Callable, **kwargs: Any) -> Any:
+def filter_arr(arr: Any, func: Callable, kwargs: dict = {}) -> Any:
     """
     Applies a given function to an array with specified keyword arguments.
 
@@ -52,15 +55,20 @@ def filter_arr(arr: Any, func: Callable, **kwargs: Any) -> Any:
         The input array to be processed.
     func : Callable
         The function to apply to the array.
-    **kwargs : Any
-        Additional keyword arguments to pass to the function.
+    kwargs : dict
+        Additional dictionary of keyword arguments to pass to the function.
 
     Returns
     -------
     Any
         The result of applying the function to the array.
     """
-    return func(arr, **kwargs)
+    result = func(arr, **kwargs)
+
+    if isinstance(result, da.Array):
+        return result.compute()
+    else:
+        return result
 
 
 def get_median_filter_params() -> List[Dict[str, Any]]:
@@ -95,6 +103,39 @@ def get_blosc_params() -> List[Dict[str, Any]]:
             {"cname": "zstd", "clevel": cl, "shuffle": blosc.Blosc.SHUFFLE}
         )
     return all_params
+
+
+def get_nl_means_params(temp_dir: Path) -> List[Dict[str, Any]]:
+    all_params = []
+    all_params.append({
+        "func": nl_means_wrapper,
+        "args": {
+            "temp_dir": temp_dir,
+            "patch_size": 11,
+            "patch_distance": 15,
+            "h_factor": 0.8,
+            "fast_mode": True,
+            "preserve_range": True,
+            "channel_axis": None
+        }
+    })
+    return all_params
+
+
+def nl_means_wrapper(arr, temp_dir, **kwargs):
+
+    def process_slice(arr, **kwargs):
+        a = arr[0].astype(np.float32)
+        sigma = estimate_sigma(a, channel_axis=None)
+        h_factor = kwargs.pop("h_factor")
+        result = denoise_nl_means(a, h=sigma*h_factor, sigma=sigma, **kwargs)
+        return result[np.newaxis, ...]
+
+    # Rechunk the array to slices ahead of time
+    arr = arr.rechunk((1, arr.shape[1], arr.shape[2]))
+    temp_store = da.to_zarr(arr, temp_dir / "temp_rechunked.zarr", compute=True, return_stored=True, overwrite=True)
+
+    return da.map_blocks(process_slice, temp_store,  **kwargs)
 
 
 def get_zarr_paths(image_dir: Union[str, Path]) -> List[Path]:
@@ -171,8 +212,8 @@ def denoise_compress_blocks(
         # Filter the array
         t0 = time.time()
         out_zarr_denoised[:] = filter_arr(
-            arr, filter_params["func"], **filter_params["args"]
-        ).compute()
+            arr, filter_params["func"], kwargs=filter_params["args"], 
+        )
         t1 = time.time()
         process_time = t1 - t0
         logging.info(f"Process Time: {process_time}")
@@ -218,6 +259,18 @@ if __name__ == "__main__":
         help="Directory to save the output data.csv.",
     )
     parser.add_argument(
+        "--filter",
+        type=str,
+        required=True,
+        choices=["median", "nl_means"]
+    )
+    parser.add_argument(
+        "--temp_dir",
+        type=str,
+        default="/tmp",
+        help="Temporary directory for intermediate files.",
+    )
+    parser.add_argument(
         "--log_level",
         type=str,
         default="INFO",
@@ -233,20 +286,36 @@ if __name__ == "__main__":
         level=numeric_level, format="%(asctime)s - %(levelname)s - %(message)s"
     )
 
+    dask.config.set(
+        {
+            "distributed.worker.memory.target": False,
+            "distributed.worker.memory.spill": False,
+            "distributed.worker.memory.pause": False,
+            "distributed.worker.memory.terminate": 0.98,
+        }
+    )
+
     client = Client(LocalCluster(processes=False))
     logging.info(f"Dask client started: {client}")
 
     image_dir: Union[str, Path] = args.image_dir
     zarr_paths: List[Path] = get_zarr_paths(image_dir)
 
-    median_params: List[Dict[str, Any]] = get_median_filter_params()
+    temp_dir = Path(args.temp_dir)
+
+    if args.filter == "median":
+        filter_params: List[Dict[str, Any]] = get_median_filter_params()
+    elif args.filter == "nl_means":
+        filter_params: List[Dict[str, Any]] = get_nl_means_params(temp_dir)
+    else:
+        raise ValueError(f"Invalid filter: {args.filter}")
 
     blosc_params: List[Dict[str, Any]] = get_blosc_params()
 
     # Create parameter combinations
     parameter_combinations: Iterable[
         Tuple[Path, Dict[str, Any], Dict[str, Any]]
-    ] = product(zarr_paths, median_params, blosc_params)
+    ] = product(zarr_paths, filter_params, blosc_params)
     # logging.debug(list(parameter_combinations))
 
     denoise_compress_blocks(parameter_combinations, output_dir=args.output_dir)
