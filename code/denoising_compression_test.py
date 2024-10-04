@@ -1,7 +1,7 @@
-import sys
-import time
 import argparse
 import logging
+import sys
+import time
 from itertools import product
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Tuple, Union
@@ -14,9 +14,10 @@ import zarr
 from dask_image.ndfilters import median_filter
 from distributed import Client, LocalCluster
 from numcodecs import blosc
-from skimage.morphology import cube
-from skimage.restoration import denoise_nl_means, denoise_tv_chambolle, estimate_sigma
 from skimage.exposure import rescale_intensity
+from skimage.morphology import cube
+from skimage.restoration import (denoise_nl_means, denoise_tv_chambolle,
+                                 estimate_sigma)
 from skimage.util import apply_parallel
 
 
@@ -108,49 +109,54 @@ def get_blosc_params() -> List[Dict[str, Any]]:
 
 def get_nl_means_params(temp_dir: Path) -> List[Dict[str, Any]]:
     all_params = []
-    all_params.append({
-        "func": nl_means_wrapper,
-        "args": {
-            "temp_dir": temp_dir,
-            "patch_size": 11,
-            "patch_distance": 15,
-            "h_factor": 0.8,
-            "fast_mode": True,
-            "preserve_range": True,
-            "channel_axis": None
+    all_params.append(
+        {
+            "func": nl_means_wrapper,
+            "args": {
+                "temp_dir": temp_dir,
+                "patch_size": 11,
+                "patch_distance": 15,
+                "h_factor": 0.8,
+                "fast_mode": True,
+                "preserve_range": True,
+                "channel_axis": None,
+            },
         }
-    })
+    )
     return all_params
 
 
 def nl_means_wrapper(arr, temp_dir, **kwargs):
-
     def process_slice(arr, **kwargs):
         a = arr[0].astype(np.float32)
         sigma = estimate_sigma(a, channel_axis=None)
         h_factor = kwargs.pop("h_factor")
-        result = denoise_nl_means(a, h=sigma*h_factor, sigma=sigma, **kwargs)
+        result = denoise_nl_means(a, h=sigma * h_factor, sigma=sigma, **kwargs)
         return result[np.newaxis, ...]
 
     # Rechunk the array to slices ahead of time
     arr = arr.rechunk((1, arr.shape[1], arr.shape[2]))
-    temp_store = da.to_zarr(arr, temp_dir / "temp_rechunked.zarr", compute=True, return_stored=True, overwrite=True)
+    temp_store = da.to_zarr(
+        arr,
+        temp_dir / "temp_rechunked.zarr",
+        compute=True,
+        return_stored=True,
+        overwrite=True,
+    )
 
-    return da.map_blocks(process_slice, temp_store,  **kwargs)
+    return da.map_blocks(process_slice, temp_store, **kwargs)
 
 
 def get_tv_chambolle_params():
     weights = [3, 5, 10, 13, 15]
     all_params = []
     for w in weights:
-        all_params.append({
-            "func": tv_chambolle_wrapper,
-            "args": {
-                "weight": w,
-                "max_num_iter": 200,
-                "channel_axis": None
+        all_params.append(
+            {
+                "func": tv_chambolle_wrapper,
+                "args": {"weight": w, "max_num_iter": 200, "channel_axis": None},
             }
-        })
+        )
     return all_params
 
 
@@ -158,10 +164,12 @@ def tv_chambolle_wrapper(arr, **kwargs):
     minimum, maximum = da.compute(arr.min(), arr.max())
     arr = arr.astype(np.float32).compute()
     arr = denoise_tv_chambolle(arr, **kwargs)
-    arr = rescale_intensity(arr, in_range="image", out_range=(minimum, maximum)).astype(np.uint16)  
+    arr = rescale_intensity(arr, in_range="image", out_range=(minimum, maximum)).astype(
+        np.uint16
+    )
     return arr
 
-    
+
 def get_zarr_paths(image_dir: Union[str, Path]) -> List[Path]:
     """
     Retrieves a list of Zarr file paths from the specified image directory.
@@ -205,7 +213,9 @@ def denoise_compress_blocks(
     output_dir.mkdir(parents=True, exist_ok=True)
     all_data = []
 
-    for i, (zarr_path, filter_params, codec_params) in enumerate(parameter_combinations):
+    for i, (zarr_path, filter_params, codec_params) in enumerate(
+        parameter_combinations
+    ):
         logging.info(f"Processing {zarr_path.name}")
         logging.info(f"Filter params: {filter_params}")
         logging.info(f"Codec params: {codec_params}")
@@ -230,13 +240,15 @@ def denoise_compress_blocks(
             dtype=arr.dtype,
             compressor=zarr.Blosc(**codec_params),
             store=zarr.DirectoryStore(out_zarr_dir / f"{zarr_path.stem}_{i}.zarr"),
-            overwrite=True
+            overwrite=True,
         )
 
         # Filter the array
         t0 = time.time()
         out_zarr_denoised[:] = filter_arr(
-            arr, filter_params["func"], kwargs=filter_params["args"], 
+            arr,
+            filter_params["func"],
+            kwargs=filter_params["args"],
         )
         t1 = time.time()
         process_time = t1 - t0
@@ -286,7 +298,7 @@ if __name__ == "__main__":
         "--filter",
         type=str,
         required=True,
-        choices=["median", "nl_means", "tv_chambolle"]
+        choices=["median", "nl_means", "tv_chambolle"],
     )
     parser.add_argument(
         "--temp_dir",
