@@ -15,7 +15,8 @@ from dask_image.ndfilters import median_filter
 from distributed import Client, LocalCluster
 from numcodecs import blosc
 from skimage.morphology import cube
-from skimage.restoration import denoise_nl_means, estimate_sigma
+from skimage.restoration import denoise_nl_means, denoise_tv_chambolle, estimate_sigma
+from skimage.exposure import rescale_intensity
 from skimage.util import apply_parallel
 
 
@@ -138,6 +139,29 @@ def nl_means_wrapper(arr, temp_dir, **kwargs):
     return da.map_blocks(process_slice, temp_store,  **kwargs)
 
 
+def get_tv_chambolle_params():
+    weights = [3, 5, 10, 13, 15]
+    all_params = []
+    for w in weights:
+        all_params.append({
+            "func": tv_chambolle_wrapper,
+            "args": {
+                "weight": w,
+                "max_num_iter": 200,
+                "channel_axis": None
+            }
+        })
+    return all_params
+
+
+def tv_chambolle_wrapper(arr, **kwargs):
+    minimum, maximum = da.compute(arr.min(), arr.max())
+    arr = arr.astype(np.float32).compute()
+    arr = denoise_tv_chambolle(arr, **kwargs)
+    arr = rescale_intensity(arr, in_range="image", out_range=(minimum, maximum)).astype(np.uint16)  
+    return arr
+
+    
 def get_zarr_paths(image_dir: Union[str, Path]) -> List[Path]:
     """
     Retrieves a list of Zarr file paths from the specified image directory.
@@ -262,7 +286,7 @@ if __name__ == "__main__":
         "--filter",
         type=str,
         required=True,
-        choices=["median", "nl_means"]
+        choices=["median", "nl_means", "tv_chambolle"]
     )
     parser.add_argument(
         "--temp_dir",
@@ -307,6 +331,8 @@ if __name__ == "__main__":
         filter_params: List[Dict[str, Any]] = get_median_filter_params()
     elif args.filter == "nl_means":
         filter_params: List[Dict[str, Any]] = get_nl_means_params(temp_dir)
+    elif args.filter == "tv_chambolle":
+        filter_params: List[Dict[str, Any]] = get_tv_chambolle_params()
     else:
         raise ValueError(f"Invalid filter: {args.filter}")
 

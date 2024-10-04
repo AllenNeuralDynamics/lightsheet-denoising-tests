@@ -26,7 +26,8 @@
 			"value_type": "string",
 			"extra_data": [
 				"median",
-				"nl_means"
+				"nl_means",
+				"tv_chambolle"
 			]
 		}
 	]
