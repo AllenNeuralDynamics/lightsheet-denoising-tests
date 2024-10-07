@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -ex
+
+conda update -n base conda -y
+conda install -n base conda-forge::mamba
+mamba install -y -c conda-forge  \
+        dask==2024.9.0 \
+        dask-image==2024.5.3 \
+        distributed==2024.9.0 \
+        jupyterlab==3.6.2 \
+        matplotlib==3.9.2 \
+        numpy==2.1.1 \
+        pandas==2.2.3 \
+        s3fs==2024.9.0 \
+        scikit-image==0.24.0 \
+        scipy==1.14.1 \
+        seaborn==0.13.2 \
+        zarr==2.18.3 \
+        s5cmd==2.2.2 \
+        cupy 

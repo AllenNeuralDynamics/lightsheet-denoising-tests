@@ -1,69 +1,9 @@
 {
 	"version": 1,
-	"base_image": "codeocean/mambaforge3:23.1.0-4-python3.10.12-ubuntu22.04",
+	"base_image": "codeocean/cuda-miniconda-jupyterlab:latest",
+	"post_install": true,
 	"options": {
 		"registry_host_arg": true,
 		"git_ask_pass": true
-	},
-	"installers": {
-		"mamba": {
-			"packages": [
-				{
-					"name": "dask",
-					"version": "2024.9.0"
-				},
-				{
-					"name": "dask-image",
-					"version": "2024.5.3"
-				},
-				{
-					"name": "distributed",
-					"version": "2024.9.0"
-				},
-				{
-					"name": "jupyterlab",
-					"version": "3.6.2"
-				},
-				{
-					"name": "matplotlib",
-					"version": "3.9.2"
-				},
-				{
-					"name": "numpy",
-					"version": "2.1.1"
-				},
-				{
-					"name": "pandas",
-					"version": "2.2.3"
-				},
-				{
-					"name": "python",
-					"version": "3.11.10"
-				},
-				{
-					"name": "s3fs",
-					"version": "2024.9.0"
-				},
-				{
-					"name": "scikit-image",
-					"version": "0.24.0"
-				},
-				{
-					"name": "scipy",
-					"version": "1.14.1"
-				},
-				{
-					"name": "seaborn",
-					"version": "0.13.2"
-				},
-				{
-					"name": "zarr",
-					"version": "2.18.3"
-				}
-			],
-			"channels": [
-				"conda-forge"
-			]
-		}
 	}
 }
