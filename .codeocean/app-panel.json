@@ -29,6 +29,16 @@
 				"nl_means",
 				"tv_chambolle"
 			]
+		},
+		{
+			"id": "PaHt3EmZExa550SV",
+			"name": "device",
+			"type": "list",
+			"value_type": "string",
+			"extra_data": [
+				"cpu",
+				"gpu"
+			]
 		}
 	]
 }

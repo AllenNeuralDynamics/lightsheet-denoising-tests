@@ -22,8 +22,9 @@ fi
 IMAGE_DIR="$1"
 S3_BUCKET="$2"
 S3_PREFIX="$3"
-OUTPUT_DIR="${4:-/results}"
 FILTER="$4"
+DEVICE="$5"
+OUTPUT_DIR="/results"
 
 # Ensure S3_PREFIX ends with a '/'
 if [[ "${S3_PREFIX}" != */ ]]; then
@@ -45,6 +46,6 @@ echo "Compressing image directory: ${IMAGE_DIR}"
 echo "Results will be stored in: ${OUTPUT_DIR}"
 echo "Will upload data to s3://${S3_BUCKET}/${S3_PREFIX}"
 
-python denoising_compression_test.py --image_dir "$IMAGE_DIR" --output_dir "$OUTPUT_DIR" --filter "$FILTER" --temp_dir "/tmp"
+python denoising_compression_test.py --image_dir "$IMAGE_DIR" --output_dir "$OUTPUT_DIR" --filter "$FILTER" --temp_dir "/tmp" --device "$DEVICE"
 
 ./bin/copy_blocks_s3.sh "$OUTPUT_DIR" "$S3_BUCKET" "$S3_PREFIX"
