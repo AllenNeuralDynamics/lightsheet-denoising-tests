@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -ex
 
-conda update -n base conda -y
+conda install conda=24.9.1
+conda update -n base conda
 conda install -n base conda-forge::mamba
-mamba install -y -c conda-forge  \
+mamba install -c conda-forge  \
         dask==2024.9.0 \
         dask-image==2024.5.3 \
         distributed==2024.9.0 \
