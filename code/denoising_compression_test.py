@@ -170,11 +170,8 @@ def tv_chambolle_wrapper(arr, device="cpu", **kwargs):
         arr = denoise_tv_chambolle(arr.compute(), **kwargs)
     elif device == "gpu":
         _ = kwargs.pop("channel_axis", None)
-        # Perform serial batch processing on the GPU using the
-        # synchronous scheduler to avoid running out of VRAM.
-        # TODO: see how this impacts the result w.r.t. edge effects
         arr = arr.map_blocks(cp.asarray)  # transfer to GPU
-        arr = da.map_blocks(denoise_tv_chambolle_gpu, arr, **kwargs)
+        arr = da.map_overlap(denoise_tv_chambolle_gpu, arr, depth=4, **kwargs)
         arr = arr.map_blocks(cp.asnumpy)  # transfer back to CPU
     else:
         raise ValueError("Invalid device. Must be one of ['cpu', 'gpu']")
