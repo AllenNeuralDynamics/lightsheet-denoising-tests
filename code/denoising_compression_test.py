@@ -169,7 +169,6 @@ def tv_chambolle_wrapper(arr, device="cpu", **kwargs):
     if device == "cpu":
         arr = denoise_tv_chambolle(arr.compute(), **kwargs)
     elif device == "gpu":
-        _ = kwargs.pop("channel_axis", None)
         arr = arr.map_blocks(cp.asarray)  # transfer to GPU
         arr = da.map_overlap(denoise_tv_chambolle_gpu, arr, depth=4, **kwargs)
         arr = arr.map_blocks(cp.asnumpy)  # transfer back to CPU
