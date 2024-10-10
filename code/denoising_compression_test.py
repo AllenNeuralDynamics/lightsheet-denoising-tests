@@ -1,16 +1,20 @@
 import argparse
 import logging
+import multiprocessing
 import sys
 import time
 from itertools import product
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Tuple, Union
 
+import cupy as cp
 import dask
 import dask.array as da
 import numpy as np
 import pandas as pd
 import zarr
+from cucim.skimage.restoration import denoise_tv_chambolle as denoise_tv_chambolle_gpu
+from dask_cuda import LocalCUDACluster
 from dask_image.ndfilters import median_filter
 from distributed import Client, LocalCluster
 from numcodecs import blosc
@@ -18,8 +22,6 @@ from skimage.exposure import rescale_intensity
 from skimage.morphology import cube
 from skimage.restoration import denoise_nl_means, denoise_tv_chambolle, estimate_sigma
 from skimage.util import apply_parallel, img_as_float32
-
-from denoise_tv_chambolle_gpu import denoise_tv_chambolle_gpu
 
 
 def make_serializable(obj: Any) -> Any:
@@ -66,12 +68,7 @@ def filter_arr(arr: Any, func: Callable, kwargs: dict = {}) -> Any:
     Any
         The result of applying the function to the array.
     """
-    result = func(arr, **kwargs)
-
-    if isinstance(result, da.Array):
-        return result.compute()
-    else:
-        return result
+    return func(arr, **kwargs)
 
 
 def get_median_filter_params() -> List[Dict[str, Any]]:
@@ -167,8 +164,6 @@ def get_tv_chambolle_params(device="cpu"):
 
 
 def tv_chambolle_wrapper(arr, device="cpu", **kwargs):
-    minimum, maximum = da.compute(arr.min(), arr.max())
-
     arr = arr.astype(np.float32)
 
     if device == "cpu":
@@ -178,15 +173,11 @@ def tv_chambolle_wrapper(arr, device="cpu", **kwargs):
         # Perform serial batch processing on the GPU using the
         # synchronous scheduler to avoid running out of VRAM.
         # TODO: see how this impacts the result w.r.t. edge effects
-        arr = da.map_blocks(
-            denoise_tv_chambolle_gpu, arr, dtype=np.float32, **kwargs
-        ).compute(scheduler="synchronous")
+        arr = arr.map_blocks(cp.asarray)  # transfer to GPU
+        arr = da.map_blocks(denoise_tv_chambolle_gpu, arr, **kwargs)
+        arr = arr.map_blocks(cp.asnumpy)  # transfer back to CPU
     else:
         raise ValueError("Invalid device. Must be one of ['cpu', 'gpu']")
-
-    arr = rescale_intensity(arr, in_range="image", out_range=(minimum, maximum)).astype(
-        np.uint16
-    )
 
     return arr
 
@@ -268,11 +259,12 @@ def denoise_compress_blocks(
 
         # Filter the array
         t0 = time.time()
-        out_zarr_denoised[:] = filter_arr(
+        filtered = filter_arr(
             arr,
             filter_params["func"],
             kwargs=filter_params["args"],
         )
+        da.store(filtered, out_zarr_denoised, compute=True, lock=False)
         t1 = time.time()
         process_time = t1 - t0
         logging.info(f"Process Time: {process_time}")
@@ -360,17 +352,22 @@ if __name__ == "__main__":
         }
     )
 
-    client = Client(LocalCluster(processes=False))
-    logging.info(f"Dask client started: {client}")
-
     image_dir: Union[str, Path] = args.image_dir
     zarr_paths: List[Path] = get_zarr_paths(image_dir)
 
     temp_dir = Path(args.temp_dir)
 
+    cpus = multiprocessing.cpu_count()
+    logging.info(f"N CPUs: {cpus}")
+
     device = args.device
     if device == "gpu":
         logging.info("Using GPU")
+        cluster = LocalCUDACluster(threads_per_worker=cpus)
+    else:
+        cluster = LocalCluster(processes=False)
+    client = Client(cluster)
+    logging.info(f"Dask client started: {client}")
 
     if args.filter == "median":
         filter_params: List[Dict[str, Any]] = get_median_filter_params()
@@ -384,9 +381,9 @@ if __name__ == "__main__":
     blosc_params: List[Dict[str, Any]] = get_blosc_params()
 
     # Create parameter combinations
-    parameter_combinations: Iterable[Tuple[Path, Dict[str, Any], Dict[str, Any]]] = (
-        product(zarr_paths, filter_params, blosc_params)
-    )
+    parameter_combinations: Iterable[
+        Tuple[Path, Dict[str, Any], Dict[str, Any]]
+    ] = product(zarr_paths, filter_params, blosc_params)
     # logging.debug(list(parameter_combinations))
 
     denoise_compress_blocks(parameter_combinations, output_dir=args.output_dir)
