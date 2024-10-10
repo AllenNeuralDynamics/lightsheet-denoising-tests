@@ -19,3 +19,5 @@ mamba install -c conda-forge  \
         zarr==2.18.3 \
         s5cmd==2.2.2 \
         cupy 
+mamba install -c rapidsai -c conda-forge -c nvidia dask-cuda cuda-version=12.1
+mamba install -c rapidsai -c conda-forge cucim cuda-version=12.1
